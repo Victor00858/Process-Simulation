@@ -1,0 +1,83 @@
+## Hydrodealkylation of Toluene (HDA process)
+## CCSI project (FOQUS paper case study),
+## Developed 03/02/2022, by: Miguel Zamarripa
+## PFR reactor simulation of the HDA process
+## Analysis synthesis and Design of Chemical Processes
+## Third Ed. Richard Turton, Richard Bailie, Wallace Whiting, J. Shaeiwitz
+## Process:
+## Temperature ranges from 580 to 700 C
+## pressure 35 to 70 bars
+## Kinetic data: Emets et al., 2006 and Meidanshahi et al., 2011
+## https://www.sciencedirect.com/science/article/abs/pii/S0255270111001632
+
+## Reaction: C7H8 + H2 --> C6H6 + CH4
+## C7H8 - Toluene - A, H2 - B, C6H6 - Benzene - C, CH4 - methane - D
+# R = -1.9580E8 * exp(K/T)*Pa*Pb^0.5  units kmol / m3 hr
+# Na = kmol/hr molar flow rate 
+import numpy as np
+import scipy
+from scipy.integrate import odeint
+import matplotlib.pyplot as plt
+
+R =8.314 # m3 kpa / K kmol
+f["Ntotal"] = x["toluene"]+x["h2"]+x["methane"]+x["benzene"]
+f["Qflow"] = R*x["temperature"]*f["Ntotal"]/x["pressure"]
+
+f["CTol_0"]=(x["toluene"]*1000.00/3600.00)/(f["Qflow"]*1000.00/3600.00)
+f["CH2_0"]=(x["h2"]*1000.00/3600.00)/(f["Qflow"]*1000.00/3600.00)
+f["CBenz_0"]=(x["benzene"]*1000.00/3600.00)/(f["Qflow"]*1000.00/3600.00)
+f["CMeth_0"]=(x["methane"]*1000.00/3600.00)/(f["Qflow"]*1000.00/3600.00)
+
+y0=[x["toluene"],x["h2"],x["methane"],x["benzene"]];
+## Na Toluene, Nb Hydrogen, Nc Benzene, Nd Methane
+Pint=x["pressure"]*1000; #bars to kpa 
+P = tuple([Pint]);
+Tint2 = x["temperature"]+273.15; # C to K
+Tint = tuple([Tint2]);
+def HDA_pp(y,v,Tint):
+    Na, Nb, Nc, Nd = y      
+    Nt   = Na + Nb + Nc + Nd;  #Nt total molar flowrate kmol/hr
+    req  = 1.958E8*np.exp(-25616.00/Tint)*(2500*Na/Nt)*np.sqrt(2500*Nb/Nt);  #R mol/lt s
+    dydv = [-req, -req, req, req]
+    return dydv
+# t discretize the volume of the tank
+v = np.linspace(0,500,501);
+
+# call the ode solver (model, initial conditions, time interval, arguments)
+sol = odeint(HDA_pp, y0, v, args=(Tint))
+
+# here we calculate back the molar flow rate in kmol/hr Nj = Cj/Q
+Na = sol[:, 0]; # return to kmol/hr
+Nb = sol[:, 1]; # kmol/hr
+Nc = sol[:, 2];
+Nd = sol[:, 3];
+
+xint = x["toluene"] - Na;
+xx = xint/x["toluene"];
+
+count=np.size(xx)-1;
+conv1 = x["conversion"];
+# x["conv"];
+#select the output values
+for i in range(0,count):
+    if xx[i] <= conv1:
+        j=i
+        Conversion = xx[i];
+        Toluene = Na[i];
+        H2      = Nb[i];
+        Benzene = Nc[i];
+        Methane = Nd[i];
+        vol = v[i];
+
+## volume = tao / Q s
+tao = vol/f["Qflow"];
+#z aspen 14.2 length and diameter 2.3 mts pp 21
+# 257 m3 book pp 716, here 263.
+## output variables 
+f["outlet_Toluene"]  = Toluene;
+f["outlet_H2"]   = H2;
+f["outlet_C6H6"] = Benzene;
+f["outlet_CH4"] = Methane;
+f["volume"] = vol;
+##f["tao"] = tao;
+##f["Final_conv"] = Conversion;
